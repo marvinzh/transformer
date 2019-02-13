@@ -24,7 +24,7 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, n_head, d_X, d_K, d_V, dropout_rate=0.1):
         super().__init__()
 
-        H = n_head
+        self.n_head = n_head
         self.d_X = d_X
 
         self.d_Q = d_K

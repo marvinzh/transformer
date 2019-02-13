@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from attention import MultiHeadAttention
 
 class PositionWiseFeedForward(nn.Module):
     def __init__(self, d_in, d_hidden, dropout_rate=0.1):
@@ -23,9 +24,9 @@ class EncoderLayer(nn.Module):
     def __init__(self, d_input, d_inner, n_head, d_K, d_V, dropout_rate=0.1):
         super(EncoderLayer, self).__init__()
         # multi-head attention
-        self.mh_att = MultiHeadAttention(n_head, d_input, d_K, d_V, dropout=dropout_rate)
+        self.mh_att = MultiHeadAttention(n_head, d_input, d_K, d_V, dropout_rate=dropout_rate)
         # position wise feed foward nets
-        self.pos_nn = PositionWiseFeedForward(d_input, d_inner, dropout=dropout_rate)
+        self.pos_nn = PositionWiseFeedForward(d_input, d_inner, dropout_rate=dropout_rate)
 
     def forward(self, X, non_pad_mask=None, mh_att_mask=None):
         att_out, att_weights = self.mh_att(X, X, X, mask=mh_att_mask)
@@ -40,9 +41,9 @@ class EncoderLayer(nn.Module):
 class DecoderLayer(nn.Module):
     def __init__(self, d_input, d_inner, n_head, d_K, d_V, dropout_rate=0.1):
         super(DecoderLayer, self).__init__()
-        self.input_mh_att = MultiHeadAttention(n_head, d_input, d_K, d_V, dropout=dropout_rate)
-        self.enc_mh_att = MultiHeadAttention(n_head, d_input, d_K, d_V, dropout=dropout_rate)
-        self.pos_nn = PositionWiseFeedForward(d_input, d_inner, dropout=dropout_rate)
+        self.input_mh_att = MultiHeadAttention(n_head, d_input, d_K, d_V, dropout_rate=dropout_rate)
+        self.enc_mh_att = MultiHeadAttention(n_head, d_input, d_K, d_V, dropout_rate=dropout_rate)
+        self.pos_nn = PositionWiseFeedForward(d_input, d_inner, dropout_rate=dropout_rate)
 
     def forward(self, X, enc_outputs, non_pad_mask=None, input_att_mask=None, enc_att_mask=None):
         self_att_out, self_att_weights = self.input_mh_att(X, X, X, mask=input_att_mask)
