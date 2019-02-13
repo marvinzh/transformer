@@ -3,10 +3,10 @@ import torch.nn as nn
 import numpy as np
 
 class ScaledDotProductAttention(nn.Module):
-    def __init__(self, d_K, dropout=0.1):
+    def __init__(self, d_K, dropout_rate=0.1):
         super().__init__()
         self.temp = np.sqrt(d_K)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout_rate = nn.Dropout(dropout_rate)
         self.softmax = nn.Softmax(dim=2)
 
     def forward(self, Q, K, V, mask=None):
@@ -15,33 +15,33 @@ class ScaledDotProductAttention(nn.Module):
         if mask is not None:
             score = score.masked_fill(mask, -np.inf)
 
-        att_weights = self.dropout(self.softmax(score))
+        att_weights = self.dropout_rate(self.softmax(score))
         output = torch.bmm(att_weights, V)
 
         return output, att_weights
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, n_head, d_x, d_k, d_v, dropout=0.1):
+    def __init__(self, n_head, d_X, d_K, d_V, dropout_rate=0.1):
         super().__init__()
 
-        self.n_head = n_head
-        self.d_x = d_x
+        H = n_head
+        self.d_X = d_X
 
-        self.d_q = d_k
-        self.d_k = d_k
-        self.d_v = d_v
+        self.d_Q = d_K
+        self.d_K = d_K
+        self.d_V = d_V
         
-        self.w_x2q = nn.Linear(d_x, n_head * self.d_q)
-        self.w_x2k = nn.Linear(d_x, n_head * self.d_k)
-        self.w_x2v = nn.Linear(d_x, n_head * self.d_v)
+        self.w_x2q = nn.Linear(d_X, n_head * self.d_Q)
+        self.w_x2k = nn.Linear(d_X, n_head * self.d_K)
+        self.w_x2v = nn.Linear(d_X, n_head * self.d_V)
 
-        self.attention = ScaledDotProductAttention(self.d_k)
-        self.layer_norm = nn.LayerNorm(d_x)
-
-        self.fc = nn.Linear(n_head * d_v, d_x)
-        self.dropout = nn.Dropout(dropout)
+        self.attention = ScaledDotProductAttention(self.d_K)
+        self.layer_norm = nn.LayerNorm(d_X)
+        self.fc = nn.Linear(n_head * d_V, d_X)
+        self.dropout_rate = nn.Dropout(dropout_rate)
 
     def forward(self, Q, K, V, mask=None):
+        H = self.n_head
         # B: batchsize, L: sequnece length
         B, L_Q, _ = Q.size()
         B, L_K, _ = K.size()
@@ -49,23 +49,27 @@ class MultiHeadAttention(nn.Module):
 
         residual = Q
 
-        Qs = self.w_x2q(Q).view(B, L_Q, self.n_head, self.d_q)
-        Ks = self.w_x2k(K).view(B, L_K, self.n_head, self.d_k)
-        Vs = self.w_x2v(V).view(B, L_V, self.n_head, self.d_v)
+        Qs = self.w_x2q(Q).view(B, L_Q, H, self.d_Q)
+        Ks = self.w_x2k(K).view(B, L_K, H, self.d_K)
+        Vs = self.w_x2v(V).view(B, L_V, H, self.d_V)
 
         # (B*H, L, D)
-        Qs = Qs.permute(2, 0, 1, 3).contiguous().view(-1, L_Q, self.d_q)
-        Ks = Ks.permute(2, 0, 1, 3).contiguous().view(-1, L_K, self.d_k)
-        Vs = Vs.permute(2, 0, 1, 3).contiguous().view(-1, L_V, self.d_v)
+        # B: batchsize, H: # of heads, L: sequnece length, D: embedding dimension
+        Qs = Qs.permute(2, 0, 1, 3).contiguous().view(-1, L_Q, self.d_Q)
+        Ks = Ks.permute(2, 0, 1, 3).contiguous().view(-1, L_K, self.d_K)
+        Vs = Vs.permute(2, 0, 1, 3).contiguous().view(-1, L_V, self.d_V)
 
 
-        mask = mask.repeat(self.n_head, 1, 1)
+        mask = mask.repeat(H, 1, 1)
         output, att_weights = self.attention(Qs, Ks, Vs, mask=mask)
 
-        output = output.view(self.n_head, B, len_q, self.d_v)
-        output = output.permute(1, 2, 0, 3).contiguous().view(B, len_q, -1)
 
-        output = self.dropout(self.fc(output))
+        output = output.view(H, B, L_Q, self.d_V)
+        # (B, L_Q, H * D)
+        # concat heads at each timestep together
+        output = output.permute(1, 2, 0, 3).contiguous().view(B, L_Q, -1)
+
+        output = self.dropout_rate(self.fc(output))
         output = self.layer_norm(output + residual)
 
         return output, att_weights
