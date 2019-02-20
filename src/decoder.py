@@ -9,7 +9,7 @@ class TransformerDecoder(nn.Module):
     def __init__(self, n_vocab, max_seq_len, d_embed, n_layers, n_head, d_K, d_V, d_input, d_inner, dropout_rate=0.1):
         super().__init__()
 
-        n_position = max_seq_len + 2
+        n_position = max_seq_len + 1
         self.embed = nn.Embedding(n_vocab, d_embed, padding_idx=C.PAD)
         self.position_enc = nn.Embedding.from_pretrained(
             utils.get_PE_table(n_position, d_embed, padding_idx=0),
@@ -18,7 +18,7 @@ class TransformerDecoder(nn.Module):
         self.layers = nn.ModuleList()
         for _ in range(n_layers):
             self.layers.append(
-                DecoderLayer(d_inner, d_inner, n_head, d_K, d_V, dropout_rate=dropout_rate)
+                DecoderLayer(d_input, d_inner, n_head, d_K, d_V, dropout_rate=dropout_rate)
             )
 
         self.proj = nn.Linear(d_input, n_vocab, bias=False)
